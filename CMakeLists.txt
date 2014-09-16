@@ -15,11 +15,11 @@ find_package(PCL 1.7 REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 
-if(ENV{TBB_INCLUDE})
+if(NOT EXISTS $ENV{TBB_INCLUDE})
    message("You must set TBB_INCLUDE")
 endif()
 
-if(NOT ENV{TBB_LIB})
+if(NOT EXISTS $ENV{TBB_LIB})
    message("You must set TBB_LIB")
 endif()
 
