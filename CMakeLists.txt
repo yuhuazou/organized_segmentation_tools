@@ -15,6 +15,17 @@ find_package(PCL 1.7 REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 
+if(ENV{TBB_INCLUDE})
+   message("You must set TBB_INCLUDE")
+endif()
+
+if(NOT ENV{TBB_LIB})
+   message("You must set TBB_LIB")
+endif()
+
+include_directories($ENV{TBB_INCLUDE})
+link_directories($ENV{TBB_LIB})
+
 ###########################################################################
 # Find GTSAM
 #find_package(GTSAM REQUIRED)
@@ -31,7 +42,7 @@ set(incs include/organized_segmentation_tools/organized_segmentation_tbb.h)
 
 set(srcs src/organized_segmentation_tbb.cpp)
 
-add_library(organized_segmentation_tools SHARED ${incs} ${srcs})
+add_library(organized_segmentation_tools  ${incs} ${srcs})
 target_link_libraries(organized_segmentation_tools ${PCL_LIBRARIES} tbb tbbmalloc)
 
 add_executable(organized_segmentation_tbb_demo src/organized_segmentation_tbb_demo.cpp)
