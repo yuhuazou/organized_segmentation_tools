@@ -66,11 +66,13 @@
 
 typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> Cloud;
-typedef typename Cloud::Ptr CloudPtr;
-typedef typename Cloud::ConstPtr CloudConstPtr;
+typedef  Cloud::Ptr CloudPtr;
+typedef  Cloud::ConstPtr CloudConstPtr;
 typedef pcl::PointCloud<pcl::Label> LabelCloud;
-typedef typename LabelCloud::Ptr LabelCloudPtr;
-typedef typename LabelCloud::ConstPtr LabelCloudConstPtr;
+typedef  LabelCloud::Ptr LabelCloudPtr;
+typedef  LabelCloud::ConstPtr LabelCloudConstPtr;
+
+
 
 template <typename PointT>
 class OrganizedFeatureExtractionDemoTBB
@@ -87,6 +89,7 @@ class OrganizedFeatureExtractionDemoTBB
     boost::shared_ptr<pcl::visualization::ImageViewer> image_viewer_;
     boost::shared_ptr<pcl::visualization::ImageViewer> plane_image_viewer_;
     
+	bool exit_;
     bool updated_;
     bool plane_updated_;
     CloudConstPtr prev_cloud_;
@@ -117,6 +120,7 @@ class OrganizedFeatureExtractionDemoTBB
     OrganizedFeatureExtractionDemoTBB ()
       : image_viewer_ (new pcl::visualization::ImageViewer ("Segmented Clusters")),
         plane_image_viewer_ (new pcl::visualization::ImageViewer ("Segmented Planes")),
+		exit_(false),
         updated_ (false),
         plane_updated_ (false),
         prev_cloud_ (new Cloud ()),
@@ -124,10 +128,35 @@ class OrganizedFeatureExtractionDemoTBB
         full_planes_cloud_ (new Cloud ()),
         full_cluster_cloud_ (new Cloud ())
     {
-      image_viewer_->setPosition (0, 0);
-      plane_image_viewer_->setPosition (640, 0);
+		image_viewer_->setPosition (0, 0);
+		plane_image_viewer_->setPosition (640, 0);
+		image_viewer_->setWindowTitle("Segmented Clusters");
+		plane_image_viewer_->setWindowTitle("Segmented Planes");
+		image_viewer_->registerKeyboardCallback(KeyboardCallback,this);
+		plane_image_viewer_->registerKeyboardCallback(KeyboardCallback,this);
+
     }
-    
+
+	static void KeyboardCallback(const pcl::visualization::KeyboardEvent& event, void* pthis)
+	{
+		OrganizedFeatureExtractionDemoTBB& ofeDemo = *static_cast<OrganizedFeatureExtractionDemoTBB*>(pthis);
+
+		if(!event.keyDown())
+			return;
+		// key: esc  or space
+		if(event.getKeyCode() == 27 || event.getKeyCode() == 32)
+		{
+			ofeDemo.exit_ = true;
+			std::cout<< "exit the program!\t^v^\n";
+		}
+	}
+	bool exit()
+	{
+		if(!exit_) return false;
+		image_viewer_->close();
+		plane_image_viewer_->close();
+		return true;
+	}
     void
     planarRegionsCallback (const CloudConstPtr cloud, boost::posix_time::ptime t, std::vector<pcl::ModelCoefficients> models, 
                            std::vector<pcl::PointIndices> inlier_indices, std::vector<pcl::PointIndices> label_indices,
@@ -377,6 +406,7 @@ main (int argc, char** argv)
   while (true)
   {
     boost::this_thread::sleep (boost::posix_time::milliseconds (10));
+	if(demo.exit()) break;
     if (raw_labels)
     {  
       demo.spinVisClusters ();
@@ -387,8 +417,9 @@ main (int argc, char** argv)
       demo.spinVisFullPlanes ();
       demo.spinVisFullClusters ();
     }
+	
   }
 
-
+  ni_grabber.stop();
   return (0);
 }
