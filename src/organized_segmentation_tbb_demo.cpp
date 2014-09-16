@@ -49,6 +49,10 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/visualization/image_viewer.h>
 #include <pcl/console/parse.h>
+#include <pcl/visualization/cloud_viewer.h>
+
+#include <pcl/common/transforms.h>
+#include <pcl/common/common.h>
 
 /** 
  * \brief Demonstration of OrganizedFeatureExtractionTBB, based on
@@ -63,14 +67,6 @@
  *
  * \author Alex Trevor
  */
-
-typedef pcl::PointXYZRGBA PointT;
-typedef pcl::PointCloud<PointT> Cloud;
-typedef  Cloud::Ptr CloudPtr;
-typedef  Cloud::ConstPtr CloudConstPtr;
-typedef pcl::PointCloud<pcl::Label> LabelCloud;
-typedef  LabelCloud::Ptr LabelCloudPtr;
-typedef  LabelCloud::ConstPtr LabelCloudConstPtr;
 
 
 
@@ -88,7 +84,8 @@ class OrganizedFeatureExtractionDemoTBB
   protected:
     boost::shared_ptr<pcl::visualization::ImageViewer> image_viewer_;
     boost::shared_ptr<pcl::visualization::ImageViewer> plane_image_viewer_;
-    
+    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer3d_;
+
 	bool exit_;
     bool updated_;
     bool plane_updated_;
@@ -120,6 +117,7 @@ class OrganizedFeatureExtractionDemoTBB
     OrganizedFeatureExtractionDemoTBB ()
       : image_viewer_ (new pcl::visualization::ImageViewer ("Segmented Clusters")),
         plane_image_viewer_ (new pcl::visualization::ImageViewer ("Segmented Planes")),
+		viewer3d_(new pcl::visualization::PCLVisualizer("minimum covering")),
 		exit_(false),
         updated_ (false),
         plane_updated_ (false),
@@ -134,7 +132,9 @@ class OrganizedFeatureExtractionDemoTBB
 		plane_image_viewer_->setWindowTitle("Segmented Planes");
 		image_viewer_->registerKeyboardCallback(KeyboardCallback,this);
 		plane_image_viewer_->registerKeyboardCallback(KeyboardCallback,this);
-
+		
+		viewer3d_->setPosition(640,640);
+		viewer3d_->registerKeyboardCallback(KeyboardCallback,this);
     }
 
 	static void KeyboardCallback(const pcl::visualization::KeyboardEvent& event, void* pthis)
@@ -155,6 +155,7 @@ class OrganizedFeatureExtractionDemoTBB
 		if(!exit_) return false;
 		image_viewer_->close();
 		plane_image_viewer_->close();
+		viewer3d_->close();
 		return true;
 	}
     void
@@ -360,12 +361,83 @@ class OrganizedFeatureExtractionDemoTBB
         }
       }
       
+	 // viewer3d_->showCloud(color_cloud);
+	 showCloudBox(color_cloud);
       if (color_cloud->points.size () > 200)
         image_viewer_->addRGBImage<PointT>(color_cloud, "label_image", 0.2);
       
       image_viewer_->spinOnce ();
     }
+
+
+	void showCloudBox(CloudPtr cloud)
+	{
+		//////////////////////////////////////////////////////////////////////////
+		// build the bounding box
+
+		// compute pricipal direction
+		Eigen::Vector4f centroid;
+		pcl::compute3DCentroid(*cloud, centroid);
+		Eigen::Matrix3f covariance;
+		pcl::computeCovarianceMatrixNormalized(*cloud, centroid, covariance);
+		Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance, Eigen::ComputeEigenvectors);
+		Eigen::Matrix3f eigDx = eigen_solver.eigenvectors();
+		eigDx.col(2) = eigDx.col(0).cross(eigDx.col(1));
+
+		// move the points to the reference frame
+		Eigen::Matrix4f p2w(Eigen::Matrix4f::Identity());
+		p2w.block<3,3>(0,0) = eigDx.transpose();
+		p2w.block<3,1>(0,3) = -1.f * (p2w.block<3,3>(0,0) * centroid.head<3>());
+		Cloud cPoints;
+		pcl::transformPointCloud(*cloud, cPoints, p2w);
+
+		PointT minPt, maxPt;
+		pcl::getMinMax3D(cPoints, minPt, maxPt);
+		const Eigen::Vector3f meanDiag = 0.5f * (maxPt.getVector3fMap() + minPt.getVector3fMap());
+
+		// final transform
+		const Eigen::Quaternionf qFinal(eigDx);
+		const Eigen::Vector3f tFinal = eigDx * meanDiag + centroid.head<3>();
+
+		//////////////////////////////////////////////////////////////////////////
+		// draw the cloud and box
+		static int j = 0;
+		//static pcl::visualization::PCLVisualizer viewer = pcl::visualization::PCLVisualizer::PCLVisualizer();
+
+		std::stringstream ss;
+		ss << "cloud_cluster_" << j ;
+
+		// draw cloud
+		viewer3d_->addPointCloud(cloud, ss.str());
+
+		// draw bounding box
+		viewer3d_->addCube(tFinal, qFinal, maxPt.x - minPt.x, maxPt.y - minPt.y, maxPt.z - minPt.z, ss.str());
+
+		// draw center point
+		CloudPtr cloudCenter( new Cloud);
+		PointT pCenter;
+		pCenter.x = tFinal[0]; pCenter.y = tFinal[1]; pCenter.z = tFinal[2];
+		pCenter.r = 255; pCenter.g = 0; pCenter.b = 0;
+		cloudCenter->points.push_back(pCenter);
+		ss.clear();
+		ss << "cluster_center_" << j;
+		viewer3d_->addPointCloud(cloudCenter, ss.str());
+
+		viewer3d_->spin();
+
+		j++;
+	}
 };
+
+
+typedef pcl::PointXYZRGBA PointT;
+//typedef OrganizedFeatureExtractionDemoTBB<PointT>::Cloud  Cloud;
+//typedef OrganizedFeatureExtractionDemoTBB<PointT>::CloudPtr CloudPtr;
+typedef OrganizedFeatureExtractionDemoTBB<PointT>::CloudConstPtr CloudConstPtr;
+
+//typedef OrganizedFeatureExtractionDemoTBB<PointT>::LabelCloud LabelCloud;
+//typedef OrganizedFeatureExtractionDemoTBB<PointT>::LabelCloudPtr LabelCloudPtr;
+typedef OrganizedFeatureExtractionDemoTBB<PointT>::LabelCloudConstPtr LabelCloudConstPtr;
 
 int
 main (int argc, char** argv)
@@ -373,7 +445,7 @@ main (int argc, char** argv)
   bool raw_labels = true;
   if (pcl::console::parse_argument (argc, argv, "-raw", raw_labels) == -1)
     raw_labels = false;
-  
+  std::cout<<"raw label: "<<raw_labels<<std::endl;
   // Create our segmentation class
   cogrob::OrganizedSegmentationTBB<PointT> seg;
 
@@ -384,18 +456,22 @@ main (int argc, char** argv)
 
   // Hook up our demo app callbacks, which will visualize the segmentation results
   OrganizedFeatureExtractionDemoTBB<PointT> demo;
-  boost::function<void(const CloudConstPtr&, const LabelCloudConstPtr&)> cluster_label_callback = boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::clusterLabelsCallback, &demo, _1, _2);
+  boost::function<void(const CloudConstPtr&, const LabelCloudConstPtr&)> cluster_label_callback = 
+	  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::clusterLabelsCallback, &demo, _1, _2);
   if (raw_labels)
     seg.setClusterLabelsCallback (cluster_label_callback);
-  boost::function<void(const CloudConstPtr&, const LabelCloudConstPtr&)> plane_label_callback = boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::planeLabelsCallback, &demo, _1, _2);
+  boost::function<void(const CloudConstPtr&, const LabelCloudConstPtr&)> plane_label_callback = 
+	  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::planeLabelsCallback, &demo, _1, _2);
   if (raw_labels)
     seg.setPlaneLabelsCallback (plane_label_callback);
 
-  boost::function<void(const CloudConstPtr, boost::posix_time::ptime, std::vector<pcl::ModelCoefficients>, std::vector<pcl::PointIndices>, std::vector<pcl::PointIndices>, std::vector<pcl::PointIndices>)> full_plane_callback = boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::planarRegionsCallback, &demo, _1, _2, _3, _4, _5, _6);
+  boost::function<void(const CloudConstPtr, boost::posix_time::ptime, std::vector<pcl::ModelCoefficients>, std::vector<pcl::PointIndices>, std::vector<pcl::PointIndices>, std::vector<pcl::PointIndices>)> full_plane_callback = 
+	  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::planarRegionsCallback, &demo, _1, _2, _3, _4, _5, _6);
   if (!raw_labels)
     seg.setFullPlanarRegionCallback (full_plane_callback);
 
-  boost::function<void(const CloudConstPtr, boost::posix_time::ptime, std::vector<pcl::PointIndices>)> full_cluster_callback = boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::fullClusterCallback, &demo, _1, _2, _3);
+  boost::function<void(const CloudConstPtr, boost::posix_time::ptime, std::vector<pcl::PointIndices>)> full_cluster_callback = 
+	  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::fullClusterCallback, &demo, _1, _2, _3);
   if (!raw_labels)
     seg.setFullClusterCallback (full_cluster_callback);
 
@@ -421,5 +497,6 @@ main (int argc, char** argv)
   }
 
   ni_grabber.stop();
+  c.disconnect();
   return (0);
 }
