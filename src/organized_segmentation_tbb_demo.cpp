@@ -85,6 +85,7 @@ class OrganizedFeatureExtractionDemoTBB
     boost::shared_ptr<pcl::visualization::ImageViewer> image_viewer_;
     boost::shared_ptr<pcl::visualization::ImageViewer> plane_image_viewer_;
     boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer3d_;
+	
 
 	bool exit_;
     bool updated_;
@@ -135,6 +136,11 @@ class OrganizedFeatureExtractionDemoTBB
 		
 		viewer3d_->setPosition(640,640);
 		viewer3d_->registerKeyboardCallback(KeyboardCallback,this);
+		viewer3d_->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1);
+		//viewer3d_->addCoordinateSystem (1.0,"global");
+		viewer3d_->initCameraParameters ();
+		viewer3d_->setSize (640, 480);
+		viewer3d_->setCameraClipDistances (0.01, 10.01);
     }
 
 	static void KeyboardCallback(const pcl::visualization::KeyboardEvent& event, void* pthis)
@@ -351,26 +357,42 @@ class OrganizedFeatureExtractionDemoTBB
       unsigned char grn [6] = {  0, 255,   0, 255,   0, 255};
       unsigned char blu [6] = {  0,   0, 255,   0, 255, 255};
 
+
       for (size_t i = 0; i < cluster_inds.size (); i++)
       {
+		CloudPtr sub_cloud(new Cloud);
         for (size_t j = 0; j < cluster_inds[i].indices.size (); j++)
         {
           color_cloud->points[cluster_inds[i].indices[j]].r = (cloud->points[cluster_inds[i].indices[j]].r + red[i%6]) / 2;
           color_cloud->points[cluster_inds[i].indices[j]].g = (cloud->points[cluster_inds[i].indices[j]].g + grn[i%6]) / 2;
           color_cloud->points[cluster_inds[i].indices[j]].b = (cloud->points[cluster_inds[i].indices[j]].b + blu[i%6]) / 2;          
+		  sub_cloud->push_back(color_cloud->points[cluster_inds[i].indices[j]]);
         }
+		showCloudBox(sub_cloud,i);
+		sub_cloud->clear();
       }
-      
-	 // viewer3d_->showCloud(color_cloud);
-	 showCloudBox(color_cloud);
+	  //setViewerPose(viewer3d_,)
+	  viewer3d_->spinOnce();
       if (color_cloud->points.size () > 200)
         image_viewer_->addRGBImage<PointT>(color_cloud, "label_image", 0.2);
       
       image_viewer_->spinOnce ();
+	  viewer3d_->removeAllShapes();
+	  viewer3d_->removeAllPointClouds();
+	  //viewer3d_->removeCorrespondences();
     }
 
+	void setViewerPose (pcl::visualization::PCLVisualizer::Ptr viewer, const Eigen::Affine3f& viewer_pose)
+	{
+		Eigen::Vector3f pos_vector = viewer_pose * Eigen::Vector3f (0, 0, 0);
+		Eigen::Vector3f look_at_vector = viewer_pose.rotation () * Eigen::Vector3f (0, 0, 1) + pos_vector;
+		Eigen::Vector3f up_vector = viewer_pose.rotation () * Eigen::Vector3f (0, -1, 0);
+		viewer->setCameraPosition (pos_vector[0], pos_vector[1], pos_vector[2],
+			look_at_vector[0], look_at_vector[1], look_at_vector[2],
+			up_vector[0], up_vector[1], up_vector[2]);
+	}
 
-	void showCloudBox(CloudPtr cloud)
+	void showCloudBox(CloudPtr cloud, int id_cloud)
 	{
 		//////////////////////////////////////////////////////////////////////////
 		// build the bounding box
@@ -401,12 +423,8 @@ class OrganizedFeatureExtractionDemoTBB
 
 		//////////////////////////////////////////////////////////////////////////
 		// draw the cloud and box
-		static int j = 0;
-		//static pcl::visualization::PCLVisualizer viewer = pcl::visualization::PCLVisualizer::PCLVisualizer();
-
 		std::stringstream ss;
-		ss << "cloud_cluster_" << j ;
-
+		ss << "cloud_cluster_" << id_cloud ;
 		// draw cloud
 		viewer3d_->addPointCloud(cloud, ss.str());
 
@@ -419,13 +437,10 @@ class OrganizedFeatureExtractionDemoTBB
 		pCenter.x = tFinal[0]; pCenter.y = tFinal[1]; pCenter.z = tFinal[2];
 		pCenter.r = 255; pCenter.g = 0; pCenter.b = 0;
 		cloudCenter->points.push_back(pCenter);
-		ss.clear();
-		ss << "cluster_center_" << j;
 		viewer3d_->addPointCloud(cloudCenter, ss.str());
 
-		viewer3d_->spin();
+		//viewer3d_->spin();
 
-		j++;
 	}
 };
 
