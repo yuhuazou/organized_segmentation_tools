@@ -127,14 +127,14 @@ class OrganizedFeatureExtractionDemoTBB
         full_planes_cloud_ (new Cloud ()),
         full_cluster_cloud_ (new Cloud ())
     {
-		image_viewer_->setPosition (0, 0);
-		plane_image_viewer_->setPosition (640, 0);
+		image_viewer_->setPosition (0, 480);
+		plane_image_viewer_->setPosition (640, 480);
 		image_viewer_->setWindowTitle("Segmented Clusters");
 		plane_image_viewer_->setWindowTitle("Segmented Planes");
 		image_viewer_->registerKeyboardCallback(KeyboardCallback,this);
 		plane_image_viewer_->registerKeyboardCallback(KeyboardCallback,this);
 		
-		viewer3d_->setPosition(640,640);
+		viewer3d_->setPosition(640,0);
 		viewer3d_->registerKeyboardCallback(KeyboardCallback,this);
 		viewer3d_->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1);
 		//viewer3d_->addCoordinateSystem (1.0,"global");
@@ -235,9 +235,10 @@ class OrganizedFeatureExtractionDemoTBB
       {
         for (size_t j = 0; j < inlier_inds[i].indices.size (); j++)
         {
-          color_cloud->points[inlier_inds[i].indices[j]].r = (cloud->points[inlier_inds[i].indices[j]].r + red[i%6]) / 2;
-          color_cloud->points[inlier_inds[i].indices[j]].g = (cloud->points[inlier_inds[i].indices[j]].g + grn[i%6]) / 2;
-          color_cloud->points[inlier_inds[i].indices[j]].b = (cloud->points[inlier_inds[i].indices[j]].b + blu[i%6]) / 2;
+		  int id = inlier_inds[i].indices[j];
+          color_cloud->points[id].r = (cloud->points[id].r + red[i%6]) / 2;
+          color_cloud->points[id].g = (cloud->points[id].g + grn[i%6]) / 2;
+          color_cloud->points[id].b = (cloud->points[id].b + blu[i%6]) / 2;
         }
       }
 
@@ -278,9 +279,10 @@ class OrganizedFeatureExtractionDemoTBB
         }
         else
         {
-          color_cloud->points[i].r = (cloud->points[i].r + red[labels->points[i].label%6]) / 2;
-          color_cloud->points[i].g = (cloud->points[i].g + grn[labels->points[i].label%6]) / 2;
-          color_cloud->points[i].b = (cloud->points[i].b + blu[labels->points[i].label%6]) / 2;
+		  int id = labels->points[i].label % 6;
+          color_cloud->points[i].r = (cloud->points[i].r + red[id]) / 2;
+          color_cloud->points[i].g = (cloud->points[i].g + grn[id]) / 2;
+          color_cloud->points[i].b = (cloud->points[i].b + blu[id]) / 2;
         }
         
       } 
@@ -320,10 +322,11 @@ class OrganizedFeatureExtractionDemoTBB
           // Do nothing
         }
         else
-        {
-          color_cloud->points[i].r = (cloud->points[i].r + red[labels->points[i].label%6]) / 2;
-          color_cloud->points[i].g = (cloud->points[i].g + grn[labels->points[i].label%6]) / 2;
-          color_cloud->points[i].b = (cloud->points[i].b + blu[labels->points[i].label%6]) / 2;
+		{
+		  int id = labels->points[i].label % 6;
+          color_cloud->points[i].r = (cloud->points[i].r + red[id]) / 2;
+          color_cloud->points[i].g = (cloud->points[i].g + grn[id]) / 2;
+          color_cloud->points[i].b = (cloud->points[i].b + blu[id]) / 2;
         }
         
       } 
@@ -363,10 +366,15 @@ class OrganizedFeatureExtractionDemoTBB
 		CloudPtr sub_cloud(new Cloud);
         for (size_t j = 0; j < cluster_inds[i].indices.size (); j++)
         {
-          color_cloud->points[cluster_inds[i].indices[j]].r = (cloud->points[cluster_inds[i].indices[j]].r + red[i%6]) / 2;
-          color_cloud->points[cluster_inds[i].indices[j]].g = (cloud->points[cluster_inds[i].indices[j]].g + grn[i%6]) / 2;
-          color_cloud->points[cluster_inds[i].indices[j]].b = (cloud->points[cluster_inds[i].indices[j]].b + blu[i%6]) / 2;          
-		  sub_cloud->push_back(color_cloud->points[cluster_inds[i].indices[j]]);
+		  int id = cluster_inds[i].indices[j];
+          color_cloud->points[id].r = (cloud->points[id].r + red[i%6]) / 2;
+          color_cloud->points[id].g = (cloud->points[id].g + grn[i%6]) / 2;
+		  color_cloud->points[id].b = (cloud->points[id].b + blu[i%6]) / 2;   
+
+		  color_cloud->points[id].x = -cloud->points[id].x;
+		  color_cloud->points[id].y = -cloud->points[id].y;  
+
+		  sub_cloud->push_back(color_cloud->points[id]);
         }
 		showCloudBox(sub_cloud,i);
 		sub_cloud->clear();
@@ -437,6 +445,8 @@ class OrganizedFeatureExtractionDemoTBB
 		pCenter.x = tFinal[0]; pCenter.y = tFinal[1]; pCenter.z = tFinal[2];
 		pCenter.r = 255; pCenter.g = 0; pCenter.b = 0;
 		cloudCenter->points.push_back(pCenter);
+		ss.str("");
+		ss << "cloud_center_" << id_cloud;
 		viewer3d_->addPointCloud(cloudCenter, ss.str());
 
 		//viewer3d_->spin();
@@ -461,57 +471,69 @@ main (int argc, char** argv)
   if (pcl::console::parse_argument (argc, argv, "-raw", raw_labels) == -1)
     raw_labels = false;
   std::cout<<"raw label: "<<raw_labels<<std::endl;
-  // Create our segmentation class
-  cogrob::OrganizedSegmentationTBB<PointT> seg;
 
-  // Create a grabber, and hook it up to the feature extraction
-  pcl::OpenNIGrabber ni_grabber ("#1");
-  boost::function<void (const CloudConstPtr&)> f = boost::bind (&cogrob::OrganizedSegmentationTBB<PointT>::cloudCallback, &seg, _1);
-  boost::signals2::connection c = ni_grabber.registerCallback (f);
+  try {
+	  // Create our segmentation class
+	  cogrob::OrganizedSegmentationTBB<PointT> seg;
 
-  // Hook up our demo app callbacks, which will visualize the segmentation results
-  OrganizedFeatureExtractionDemoTBB<PointT> demo;
-  boost::function<void(const CloudConstPtr&, const LabelCloudConstPtr&)> cluster_label_callback = 
-	  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::clusterLabelsCallback, &demo, _1, _2);
-  if (raw_labels)
-    seg.setClusterLabelsCallback (cluster_label_callback);
-  boost::function<void(const CloudConstPtr&, const LabelCloudConstPtr&)> plane_label_callback = 
-	  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::planeLabelsCallback, &demo, _1, _2);
-  if (raw_labels)
-    seg.setPlaneLabelsCallback (plane_label_callback);
+	  // Create a grabber, and hook it up to the feature extraction
+	  pcl::OpenNIGrabber ni_grabber ("#1");
+	  boost::function<void (const CloudConstPtr&)> f = boost::bind (&cogrob::OrganizedSegmentationTBB<PointT>::cloudCallback, &seg, _1);
+	  boost::signals2::connection c = ni_grabber.registerCallback (f);
 
-  boost::function<void(const CloudConstPtr, boost::posix_time::ptime, std::vector<pcl::ModelCoefficients>, std::vector<pcl::PointIndices>, std::vector<pcl::PointIndices>, std::vector<pcl::PointIndices>)> full_plane_callback = 
-	  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::planarRegionsCallback, &demo, _1, _2, _3, _4, _5, _6);
-  if (!raw_labels)
-    seg.setFullPlanarRegionCallback (full_plane_callback);
+	  // Hook up our demo app callbacks, which will visualize the segmentation results
+	  OrganizedFeatureExtractionDemoTBB<PointT> demo;
+	  boost::function<void(const CloudConstPtr&, const LabelCloudConstPtr&)> cluster_label_callback = 
+		  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::clusterLabelsCallback, &demo, _1, _2);
+	  if (raw_labels)
+		  seg.setClusterLabelsCallback (cluster_label_callback);
+	  boost::function<void(const CloudConstPtr&, const LabelCloudConstPtr&)> plane_label_callback = 
+		  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::planeLabelsCallback, &demo, _1, _2);
+	  if (raw_labels)
+		  seg.setPlaneLabelsCallback (plane_label_callback);
 
-  boost::function<void(const CloudConstPtr, boost::posix_time::ptime, std::vector<pcl::PointIndices>)> full_cluster_callback = 
-	  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::fullClusterCallback, &demo, _1, _2, _3);
-  if (!raw_labels)
-    seg.setFullClusterCallback (full_cluster_callback);
+	  boost::function<void(const CloudConstPtr, boost::posix_time::ptime, std::vector<pcl::ModelCoefficients>, std::vector<pcl::PointIndices>, std::vector<pcl::PointIndices>, std::vector<pcl::PointIndices>)> full_plane_callback = 
+		  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::planarRegionsCallback, &demo, _1, _2, _3, _4, _5, _6);
+	  if (!raw_labels)
+		  seg.setFullPlanarRegionCallback (full_plane_callback);
 
-  // Start spinning
-  ni_grabber.start ();
-  seg.spin ();
+	  boost::function<void(const CloudConstPtr, boost::posix_time::ptime, std::vector<pcl::PointIndices>)> full_cluster_callback = 
+		  boost::bind (&OrganizedFeatureExtractionDemoTBB<PointT>::fullClusterCallback, &demo, _1, _2, _3);
+	  if (!raw_labels)
+		  seg.setFullClusterCallback (full_cluster_callback);
 
-  while (true)
-  {
-    boost::this_thread::sleep (boost::posix_time::milliseconds (10));
-	if(demo.exit()) break;
-    if (raw_labels)
-    {  
-      demo.spinVisClusters ();
-      demo.spinVisPlanes ();
-    }
-    else
-    {
-      demo.spinVisFullPlanes ();
-      demo.spinVisFullClusters ();
-    }
-	
+	  // Start spinning
+	  ni_grabber.start ();
+	  if (ni_grabber.isRunning()) {
+		  seg.spin ();
+
+		  while (true)
+		  {
+			  boost::this_thread::sleep (boost::posix_time::milliseconds (10));
+			  if(demo.exit()) break;
+			  if (raw_labels)
+			  {  
+				  demo.spinVisClusters ();
+				  demo.spinVisPlanes ();
+			  }
+			  else
+			  {
+				  demo.spinVisFullPlanes ();
+				  demo.spinVisFullClusters ();
+			  }
+
+		  }
+
+		  ni_grabber.stop();
+		  c.disconnect();
+	  }
+  }
+  catch (pcl::PCLException e) {
+	  PCL_ERROR ("pcl::PCLException: %s\n", e.what());
+  }
+  catch (std::exception e) {
+	  PCL_ERROR ("std::exception: %s\n", e.what());
   }
 
-  ni_grabber.stop();
-  c.disconnect();
   return (0);
 }

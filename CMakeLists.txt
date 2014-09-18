@@ -7,7 +7,7 @@ SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++11")
 SET(CMAKE_C_FLAGS_RELEASE "-O3 -std=c++11")
 
 #set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-message (MODULE_PATH= ${CMAKE_MODULE_PATH})
+#message (MODULE_PATH= ${CMAKE_MODULE_PATH})
 
 ###########################################################################
 # Find PCL
@@ -15,16 +15,10 @@ find_package(PCL 1.7 REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 
-if(NOT EXISTS $ENV{TBB_INCLUDE})
-   message("You must set TBB_INCLUDE")
-endif()
-
-if(NOT EXISTS $ENV{TBB_LIB})
-   message("You must set TBB_LIB")
-endif()
-
-include_directories($ENV{TBB_INCLUDE})
-link_directories($ENV{TBB_LIB})
+set(TBB_INCLUDE_DIRS "TBB_INCLUDE_DIRS-NOTFOUND" CACHE PATH "description")
+set(TBB_LIBRARY_DIRS "TBB_LIBRARY_DIRS-NOTFOUND" CACHE PATH "description")
+include_directories(${TBB_INCLUDE_DIRS})
+link_directories(${TBB_LIBRARY_DIRS})
 
 ###########################################################################
 # Find GTSAM
